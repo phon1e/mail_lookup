@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Lookup Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #17171e;
+    --card: #1e1e28;
+    --border: #2e2e3e;
+    --accent: #00e5a0;
+    --accent2: #7c6aff;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --danger: #ff5e7a;
+    --warn: #ffd166;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    min-height: 100vh;
+    padding: 32px 20px;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; position: relative; z-index: 1; }
+
+  header { margin-bottom: 40px; }
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #fff 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle { color: var(--muted); margin-top: 8px; font-size: 15px; }
+
+  .steps { display: flex; gap: 12px; margin-bottom: 32px; }
+  .step {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    transition: border-color 0.2s;
+  }
+  .step.active { border-color: var(--accent); }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--border); display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .step.active .step-num { background: var(--accent); color: #000; }
+  .step-label { font-size: 13px; color: var(--muted); line-height: 1.3; }
+  .step.active .step-label { color: var(--text); }
+
+  .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  .upload-card {
+    background: var(--card); border: 2px dashed var(--border);
+    border-radius: 12px; padding: 24px; cursor: pointer;
+    transition: all 0.2s; position: relative; overflow: hidden;
+  }
+  .upload-card:hover { border-color: var(--accent2); }
+  .upload-card.loaded { border-style: solid; border-color: var(--accent); }
+  .upload-card input { display: none; }
+  .upload-card label { cursor: pointer; display: block; }
+
+  .upload-icon { font-size: 28px; margin-bottom: 10px; }
+  .upload-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .upload-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .upload-status {
+    display: none; margin-top: 10px; padding: 8px 10px;
+    background: rgba(0,229,160,0.08); border-radius: 6px;
+    font-size: 12px; color: var(--accent);
+    font-family: 'Space Mono', monospace;
+  }
+  .upload-card.loaded .upload-status { display: block; }
+
+  .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .config-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .config-label {
+    font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace;
+    letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  select, input[type=number] {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: 'Sarabun', sans-serif;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  select:focus, input[type=number]:focus { border-color: var(--accent2); }
+
+  .run-btn {
+    width: 100%; padding: 16px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000; font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700;
+    letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
+    margin-bottom: 28px; position: relative; overflow: hidden;
+  }
+  .run-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,229,160,0.3); }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .results-panel {
+    display: none; background: var(--card);
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  }
+  .results-panel.show { display: block; }
+
+  .results-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .results-title { font-weight: 600; font-size: 15px; }
+  .stats { display: flex; gap: 20px; }
+  .stat { text-align: right; }
+  .stat-num { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; }
+  .stat-num.green { color: var(--accent); }
+  .stat-num.red { color: var(--danger); }
+  .stat-num.warn { color: var(--warn); }
+  .stat-label { font-size: 11px; color: var(--muted); }
+
+  .table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; background: var(--surface);
+    padding: 10px 14px; text-align: left; font-family: 'Space Mono', monospace;
+    font-size: 11px; letter-spacing: 1px; color: var(--muted);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s; }
+  tbody tr:hover { background: rgba(255,255,255,0.03); }
+  tbody td { padding: 9px 14px; vertical-align: middle; }
+  .row-num { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px; }
+  .org-name { max-width: 200px; }
+  .email-cell { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--accent); }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge.found { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .badge.multi { background: rgba(255,209,102,0.12); color: var(--warn); }
+  .badge.notfound { background: rgba(255,94,122,0.12); color: var(--danger); }
+  .match-score { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px; }
+
+  .download-btn {
+    margin: 16px 20px; padding: 11px 20px; border: none; border-radius: 8px;
+    background: rgba(0,229,160,0.1); border: 1px solid var(--accent);
+    color: var(--accent); font-family: 'Space Mono', monospace; font-size: 12px;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 1px;
+  }
+  .download-btn:hover { background: rgba(0,229,160,0.2); }
+
+  .progress-bar {
+    display: none; height: 3px; background: var(--border); border-radius: 2px;
+    margin-bottom: 24px; overflow: hidden;
+  }
+  .progress-bar.show { display: block; }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px; transition: width 0.3s;
+  }
+
+  @media (max-width: 600px) {
+    .upload-row, .config-row, .steps { grid-template-columns: 1fr; flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="container">
+  <header>
+    <div class="logo">⚡ Email Lookup Tool</div>
+    <h1>Org → Email Matcher</h1>
+    <p class="subtitle">อัปโหลดไฟล์ Excel 2 ไฟล์ ระบบจะจับคู่ชื่อองค์กรและดึง Email อัตโนมัติ</p>
+  </header>
+
+  <div class="steps">
+    <div class="step" id="step1">
+      <div class="step-num">1</div>
+      <div class="step-label">อัปโหลดไฟล์<br>Input + Database</div>
+    </div>
+    <div class="step" id="step2">
+      <div class="step-num">2</div>
+      <div class="step-label">ตั้งค่า<br>คอลัมน์</div>
+    </div>
+    <div class="step" id="step3">
+      <div class="step-num">3</div>
+      <div class="step-label">รัน &amp; ดาวน์โหลด<br>ผลลัพธ์</div>
+    </div>
+  </div>
+
+  <div class="upload-row">
+    <div class="upload-card" id="card1" onclick="document.getElementById('file1').click()">
+      <input type="file" id="file1" accept=".xlsx,.xls" onchange="loadFile(1, this)">
+      <label>
+        <div class="upload-icon">📋</div>
+        <div class="upload-title">File 1 — Input</div>
+        <div class="upload-hint">ไฟล์ที่มีชื่อองค์กร<br>(ชื่อสั้น เช่น col C)</div>
+        <div class="upload-status" id="status1">—</div>
+      </label>
+    </div>
+    <div class="upload-card" id="card2" onclick="document.getElementById('file2').click()">
+      <input type="file" id="file2" accept=".xlsx,.xls" onchange="loadFile(2, this)">
+      <label>
+        <div class="upload-icon">🗄️</div>
+        <div class="upload-title">File 2 — Database</div>
+        <div class="upload-hint">ไฟล์ฐานข้อมูล<br>(ชื่อเต็ม + Email)</div>
+        <div class="upload-status" id="status2">—</div>
+      </label>
+    </div>
+  </div>
+
+  <div class="config-row">
+    <div class="config-card">
+      <div class="config-label">File 1 — Org Name Col</div>
+      <select id="col_input">
+        <option value="2">C (index 3)</option>
+        <option value="0">A (index 1)</option>
+        <option value="1">B (index 2)</option>
+        <option value="3">D (index 4)</option>
+        <option value="4">E (index 5)</option>
+      </select>
+    </div>
+    <div class="config-card">
+      <div class="config-label">File 2 — Name Col (Full)</div>
+      <select id="col_db_name">
+        <option value="6">G (index 7)</option>
+        <option value="0">A</option><option value="1">B</option>
+        <option value="2">C</option><option value="3">D</option>
+        <option value="4">E</option><option value="5">F</option>
+        <option value="7">H</option><option value="8">I</option>
+      </select>
+    </div>
+    <div class="config-card">
+      <div class="config-label">File 2 — Email Col</div>
+      <select id="col_db_email">
+        <option value="8">I (index 9)</option>
+        <option value="0">A</option><option value="1">B</option>
+        <option value="2">C</option><option value="3">D</option>
+        <option value="4">E</option><option value="5">F</option>
+        <option value="6">G</option><option value="7">H</option>
+        <option value="9">J</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="config-row" style="grid-template-columns:1fr 1fr;">
+    <div class="config-card">
+      <div class="config-label">Multiple Matches</div>
+      <select id="multi_mode">
+        <option value="shortest">ใช้ชื่อที่สั้นที่สุด (Best Match)</option>
+        <option value="all">รวมทุก email คั่นด้วย ,</option>
+        <option value="flag">Flag ว่า MULTIPLE MATCHES</option>
+      </select>
+    </div>
+    <div class="config-card">
+      <div class="config-label">Skip Header Rows</div>
+      <input type="number" id="header_rows" value="1" min="0" max="10">
+    </div>
+  </div>
+
+  <button class="run-btn" id="runBtn" onclick="runMatch()" disabled>
+    ▶ RUN MATCHING
+  </button>
+
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+
+  <div class="results-panel" id="resultsPanel">
+    <div class="results-header">
+      <div class="results-title">Results Preview</div>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-num green" id="countFound">0</div>
+          <div class="stat-label">Found</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num warn" id="countMulti">0</div>
+          <div class="stat-label">Multiple</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num red" id="countMiss">0</div>
+          <div class="stat-label">Not Found</div>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="previewTable">
+        <thead id="previewHead"></thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+    <button class="download-btn" onclick="downloadResult()">⬇ DOWNLOAD EXCEL</button>
+  </div>
+</div>
+
+<script>
+let wb1 = null, wb2 = null;
+let resultRows = [];
+let originalHeaders = [];
+
+function loadFile(num, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    if (num === 1) { wb1 = wb; }
+    else { wb2 = wb; }
+
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const rows = data.length;
+    const cols = data[0] ? data[0].length : 0;
+
+    document.getElementById(`card${num}`).classList.add('loaded');
+    document.getElementById(`status${num}`).textContent =
+      `✓ ${file.name}  |  ${rows} rows × ${cols} cols`;
+
+    if (wb1 && wb2) {
+      document.getElementById('runBtn').disabled = false;
+      document.getElementById('step2').classList.add('active');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function normalize(str) {
+  if (!str) return '';
+  return String(str).replace(/\s+/g, ' ').trim();
+}
+
+async function runMatch() {
+  if (!wb1 || !wb2) return;
+
+  document.getElementById('step3').classList.add('active');
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  runBtn.textContent = '⏳ PROCESSING...';
+
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  progressBar.classList.add('show');
+
+  const colInput = parseInt(document.getElementById('col_input').value);
+  const colDbName = parseInt(document.getElementById('col_db_name').value);
+  const colDbEmail = parseInt(document.getElementById('col_db_email').value);
+  const multiMode = document.getElementById('multi_mode').value;
+  const skipRows = parseInt(document.getElementById('header_rows').value);
+
+  // Parse files
+  const ws1 = wb1.Sheets[wb1.SheetNames[0]];
+  const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+  const data1 = XLSX.utils.sheet_to_json(ws1, { header: 1 });
+  const data2 = XLSX.utils.sheet_to_json(ws2, { header: 1 });
+
+  // Build database lookup
+  const db = [];
+  for (let i = skipRows; i < data2.length; i++) {
+    const row = data2[i];
+    const name = normalize(row[colDbName]);
+    const email = normalize(row[colDbEmail]);
+    if (name) db.push({ name, email, row: i });
+  }
+
+  // Build result
+  originalHeaders = data1[skipRows - 1] || data1[0] || [];
+  resultRows = [];
+  let found = 0, multi = 0, miss = 0;
+
+  for (let i = 0; i < data1.length; i++) {
+    progressFill.style.width = Math.round((i / data1.length) * 100) + '%';
+
+    const row = [...(data1[i] || [])];
+    if (i < skipRows) {
+      // Header row
+      const headerRow = [...row];
+      while (headerRow.length <= colInput + 1) headerRow.push('');
+      headerRow.push('Email (Matched)');
+      headerRow.push('Match Status');
+      resultRows.push({ cells: headerRow, status: 'header' });
+      continue;
+    }
+
+    const orgName = normalize(row[colInput]);
+    if (!orgName) {
+      while (row.length <= colInput + 1) row.push('');
+      row.push('');
+      row.push('');
+      resultRows.push({ cells: row, status: 'empty', org: '' });
+      continue;
+    }
+
+    // Fuzzy partial match
+    const matches = db.filter(d => d.name.includes(orgName) || orgName.includes(d.name));
+
+    let email = '';
+    let status = '';
+
+    if (matches.length === 0) {
+      email = '';
+      status = 'NOT FOUND';
+      miss++;
+    } else if (matches.length === 1) {
+      email = matches[0].email;
+      status = 'FOUND';
+      found++;
+    } else {
+      multi++;
+      if (multiMode === 'shortest') {
+        const best = matches.sort((a, b) => a.name.length - b.name.length)[0];
+        email = best.email;
+        status = `FOUND (${matches.length} matches)`;
+        found++;
+      } else if (multiMode === 'all') {
+        email = [...new Set(matches.map(m => m.email))].join(', ');
+        status = `MULTIPLE (${matches.length})`;
+      } else {
+        email = 'MULTIPLE MATCHES';
+        status = `MULTIPLE (${matches.length})`;
+      }
+    }
+
+    while (row.length <= colInput) row.push('');
+    row.push(email);
+    row.push(status);
+    resultRows.push({ cells: row, status: status === 'NOT FOUND' ? 'notfound' : (status.startsWith('MULTIPLE') ? 'multi' : 'found'), org: orgName, email });
+  }
+
+  // Update stats
+  document.getElementById('countFound').textContent = found;
+  document.getElementById('countMulti').textContent = multi;
+  document.getElementById('countMiss').textContent = miss;
+
+  // Render preview table
+  renderPreview();
+
+  progressFill.style.width = '100%';
+  setTimeout(() => progressBar.classList.remove('show'), 500);
+
+  document.getElementById('resultsPanel').classList.add('show');
+  runBtn.disabled = false;
+  runBtn.textContent = '▶ RUN MATCHING';
+}
+
+function renderPreview() {
+  const head = document.getElementById('previewHead');
+  const body = document.getElementById('previewBody');
+  head.innerHTML = '';
+  body.innerHTML = '';
+
+  const headerRow = resultRows.find(r => r.status === 'header');
+  if (headerRow) {
+    const tr = document.createElement('tr');
+    headerRow.cells.forEach((c, i) => {
+      const th = document.createElement('th');
+      th.textContent = c || `Col ${i+1}`;
+      tr.appendChild(th);
+    });
+    head.appendChild(tr);
+  }
+
+  const dataRows = resultRows.filter(r => r.status !== 'header');
+  const preview = dataRows.slice(0, 100);
+  preview.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    row.cells.forEach((c, i) => {
+      const td = document.createElement('td');
+      const isEmailCol = i === row.cells.length - 2;
+      const isStatusCol = i === row.cells.length - 1;
+      if (isStatusCol && row.status !== 'empty') {
+        const s = String(c);
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + row.status;
+        badge.textContent = s;
+        td.appendChild(badge);
+      } else if (isEmailCol && c) {
+        td.className = 'email-cell';
+        td.textContent = c;
+      } else {
+        td.textContent = c ?? '';
+      }
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+function downloadResult() {
+  const ws = XLSX.utils.aoa_to_sheet(resultRows.map(r => r.cells));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Result');
+  XLSX.writeFile(wb, 'email_matched_output.xlsx');
+}
+</script>
+</body>
+</html>
