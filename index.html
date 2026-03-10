@@ -355,7 +355,15 @@ function loadFile(num, input) {
 
 function normalize(str) {
   if (!str) return '';
-  return String(str).replace(/\s+/g, ' ').trim();
+  return String(str)
+    .replace(/\s+/g, ' ')
+    .trim()
+    // Normalize Thai "sara am" variants: ํา (U+0E4D + U+0E32) → ำ (U+0E33)
+    .replace(/\u0e4d\u0e32/g, '\u0e33')
+    // Normalize Thai "mai han akat" + vowel combos
+    .replace(/\u0e4d/g, '\u0e33')
+    // NFC unicode normalization
+    .normalize('NFC');
 }
 
 async function runMatch() {
