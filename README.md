@@ -4,6 +4,7 @@ A browser-based tool that matches Thai organization names from an input Excel fi
 
 No installation required. Runs entirely in the browser.
 
+demo: https://phon1e.github.io/mail_lookup/
 ---
 
 ## How It Works
