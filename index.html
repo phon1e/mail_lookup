@@ -427,8 +427,33 @@ async function runMatch() {
       continue;
     }
 
-    // Fuzzy partial match
-    const matches = db.filter(d => d.name.includes(orgName) || orgName.includes(d.name));
+    // Smart match: substring first, then keyword overlap scoring
+    let matches = db.filter(d => d.name.includes(orgName) || orgName.includes(d.name));
+
+    if (matches.length === 0) {
+      // Strip org-type prefixes and score by shared keywords
+      const ORG_TYPES = ['เทศบาลนคร','เทศบาลเมือง','เทศบาลตำบล','เทศบาลตําบล',
+        'องค์การบริหารส่วนตำบล','องค์การบริหารส่วนตําบล','องค์การบริหารส่วนจังหวัด',
+        'อบต.','อบจ.','เมืองพัทยา','กรุงเทพมหานคร'];
+      const stripType = s => {
+        let out = s;
+        for (const t of ORG_TYPES) out = out.replace(t, '');
+        return out.trim();
+      };
+      const keywords = s => stripType(s).split(/\s+/).filter(w => w.length > 1);
+      const inputKw = keywords(orgName);
+      if (inputKw.length > 0) {
+        const scored = db.map(d => {
+          const dbKw = keywords(d.name);
+          const shared = inputKw.filter(w => dbKw.includes(w)).length;
+          return { ...d, score: shared };
+        }).filter(d => d.score > 0);
+        if (scored.length > 0) {
+          const maxScore = Math.max(...scored.map(s => s.score));
+          matches = scored.filter(s => s.score === maxScore);
+        }
+      }
+    }
 
     let email = '';
     let status = '';
