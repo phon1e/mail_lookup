@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Email Lookup Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
 
   :root {
     --bg: #0f0f13;
@@ -26,7 +26,7 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Sarabun', sans-serif;
+    font-family: 'Inter', sans-serif;
     min-height: 100vh;
     padding: 32px 20px;
   }
@@ -112,7 +112,7 @@
   }
   select, input[type=number] {
     width: 100%; background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: 'Sarabun', sans-serif;
+    color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: 'Inter', sans-serif;
     font-size: 14px; outline: none; transition: border-color 0.2s;
   }
   select:focus, input[type=number]:focus { border-color: var(--accent2); }
@@ -198,21 +198,21 @@
   <header>
     <div class="logo">⚡ Email Lookup Tool</div>
     <h1>Org → Email Matcher</h1>
-    <p class="subtitle">อัปโหลดไฟล์ Excel 2 ไฟล์ ระบบจะจับคู่ชื่อองค์กรและดึง Email อัตโนมัติ</p>
+    <p class="subtitle">Upload two Excel files and the tool will automatically match organization names and extract emails.</p>
   </header>
 
   <div class="steps">
     <div class="step" id="step1">
       <div class="step-num">1</div>
-      <div class="step-label">อัปโหลดไฟล์<br>Input + Database</div>
+      <div class="step-label">Upload<br>Input + Database</div>
     </div>
     <div class="step" id="step2">
       <div class="step-num">2</div>
-      <div class="step-label">ตั้งค่า<br>คอลัมน์</div>
+      <div class="step-label">Configure<br>Columns</div>
     </div>
     <div class="step" id="step3">
       <div class="step-num">3</div>
-      <div class="step-label">รัน &amp; ดาวน์โหลด<br>ผลลัพธ์</div>
+      <div class="step-label">Run &amp; Download<br>Results</div>
     </div>
   </div>
 
@@ -222,7 +222,7 @@
       <label>
         <div class="upload-icon">📋</div>
         <div class="upload-title">File 1 — Input</div>
-        <div class="upload-hint">ไฟล์ที่มีชื่อองค์กร<br>(ชื่อสั้น เช่น col C)</div>
+        <div class="upload-hint">File containing organization names<br>(short name, e.g. col C)</div>
         <div class="upload-status" id="status1">—</div>
       </label>
     </div>
@@ -231,7 +231,7 @@
       <label>
         <div class="upload-icon">🗄️</div>
         <div class="upload-title">File 2 — Database</div>
-        <div class="upload-hint">ไฟล์ฐานข้อมูล<br>(ชื่อเต็ม + Email)</div>
+        <div class="upload-hint">Database file containing<br>full names + emails</div>
         <div class="upload-status" id="status2">—</div>
       </label>
     </div>
@@ -275,9 +275,9 @@
     <div class="config-card">
       <div class="config-label">Multiple Matches</div>
       <select id="multi_mode">
-        <option value="shortest">ใช้ชื่อที่สั้นที่สุด (Best Match)</option>
-        <option value="all">รวมทุก email คั่นด้วย ,</option>
-        <option value="flag">Flag ว่า MULTIPLE MATCHES</option>
+        <option value="shortest">Use shortest name (Best Match)</option>
+        <option value="all">Combine all emails separated by ,</option>
+        <option value="flag">Flag as MULTIPLE MATCHES</option>
       </select>
     </div>
     <div class="config-card">
@@ -358,11 +358,8 @@ function normalize(str) {
   return String(str)
     .replace(/\s+/g, ' ')
     .trim()
-    // Normalize Thai "sara am" variants: ํา (U+0E4D + U+0E32) → ำ (U+0E33)
     .replace(/\u0e4d\u0e32/g, '\u0e33')
-    // Normalize Thai "mai han akat" + vowel combos
     .replace(/\u0e4d/g, '\u0e33')
-    // NFC unicode normalization
     .normalize('NFC');
 }
 
@@ -384,13 +381,11 @@ async function runMatch() {
   const multiMode = document.getElementById('multi_mode').value;
   const skipRows = parseInt(document.getElementById('header_rows').value);
 
-  // Parse files
   const ws1 = wb1.Sheets[wb1.SheetNames[0]];
   const ws2 = wb2.Sheets[wb2.SheetNames[0]];
   const data1 = XLSX.utils.sheet_to_json(ws1, { header: 1 });
   const data2 = XLSX.utils.sheet_to_json(ws2, { header: 1 });
 
-  // Build database lookup
   const db = [];
   for (let i = skipRows; i < data2.length; i++) {
     const row = data2[i];
@@ -399,7 +394,6 @@ async function runMatch() {
     if (name) db.push({ name, email, row: i });
   }
 
-  // Build result
   originalHeaders = data1[skipRows - 1] || data1[0] || [];
   resultRows = [];
   let found = 0, multi = 0, miss = 0;
@@ -409,7 +403,6 @@ async function runMatch() {
 
     const row = [...(data1[i] || [])];
     if (i < skipRows) {
-      // Header row
       const headerRow = [...row];
       while (headerRow.length <= colInput + 1) headerRow.push('');
       headerRow.push('Email (Matched)');
@@ -427,11 +420,9 @@ async function runMatch() {
       continue;
     }
 
-    // Smart match: substring first, then keyword overlap scoring
     let matches = db.filter(d => d.name.includes(orgName) || orgName.includes(d.name));
 
     if (matches.length === 0) {
-      // Strip org-type prefixes and score by shared keywords
       const ORG_TYPES = ['เทศบาลนคร','เทศบาลเมือง','เทศบาลตำบล','เทศบาลตําบล',
         'องค์การบริหารส่วนตำบล','องค์การบริหารส่วนตําบล','องค์การบริหารส่วนจังหวัด',
         'อบต.','อบจ.','เมืองพัทยา','กรุงเทพมหานคร'];
@@ -488,12 +479,10 @@ async function runMatch() {
     resultRows.push({ cells: row, status: status === 'NOT FOUND' ? 'notfound' : (status.startsWith('MULTIPLE') ? 'multi' : 'found'), org: orgName, email });
   }
 
-  // Update stats
   document.getElementById('countFound').textContent = found;
   document.getElementById('countMulti').textContent = multi;
   document.getElementById('countMiss').textContent = miss;
 
-  // Render preview table
   renderPreview();
 
   progressFill.style.width = '100%';
