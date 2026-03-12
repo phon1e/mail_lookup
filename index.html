@@ -222,6 +222,32 @@
   }
   .download-btn:hover { background: rgba(0,229,160,0.2); }
 
+  /* Duplicate row highlight */
+  tbody tr.dup-row td { background: rgba(255,94,122,0.07); }
+  tbody tr.dup-row td:first-child { border-left: 3px solid var(--danger); }
+  .dup-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; font-family: 'Space Mono', monospace;
+    background: rgba(255,94,122,0.15); color: var(--danger);
+    margin-left: 5px; vertical-align: middle;
+  }
+
+  /* Dup toolbar */
+  .dup-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 20px; border-top: 1px solid var(--border);
+    background: rgba(255,94,122,0.04);
+  }
+  .dup-count { font-size: 12px; color: var(--danger); font-family: 'Space Mono', monospace; }
+  .dup-toggle {
+    padding: 5px 12px; border: none; border-radius: 6px;
+    background: rgba(255,94,122,0.12); border: 1px solid rgba(255,94,122,0.3);
+    color: var(--danger); font-family: 'Space Mono', monospace;
+    font-size: 11px; cursor: pointer; transition: all 0.2s;
+  }
+  .dup-toggle:hover { background: rgba(255,94,122,0.25); }
+  .dup-toggle.active { background: var(--danger); color: #fff; border-color: var(--danger); }
+
   .progress-bar { display: none; height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 24px; overflow: hidden; }
   .progress-bar.show { display: block; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.3s; }
@@ -326,6 +352,27 @@
     </div>
   </div>
 
+  <!-- Duplicate detection -->
+  <div class="config-row" style="grid-template-columns:1fr 1fr;">
+    <div class="config-card">
+      <div class="config-label">🔁 Duplicate Check — Column</div>
+      <select id="col_dup">
+        <option value="2">C (index 3)</option>
+        <option value="0">A (index 1)</option><option value="1">B (index 2)</option>
+        <option value="3">D (index 4)</option><option value="4">E (index 5)</option>
+        <option value="5">F (index 6)</option><option value="6">G (index 7)</option>
+        <option value="7">H (index 8)</option><option value="8">I (index 9)</option>
+      </select>
+    </div>
+    <div class="config-card">
+      <div class="config-label">Duplicate Action</div>
+      <select id="dup_action">
+        <option value="highlight">Highlight duplicates (keep all rows)</option>
+        <option value="remove">Remove duplicates (keep first only)</option>
+      </select>
+    </div>
+  </div>
+
   <!-- File path builder -->
   <div class="filepath-card">
     <div class="config-label" style="margin-bottom:12px;">📁 Output File Path Builder</div>
@@ -384,6 +431,10 @@
       <table><thead id="previewHead"></thead><tbody id="previewBody"></tbody></table>
     </div>
     <button class="download-btn" onclick="downloadResult()">⬇ DOWNLOAD EXCEL</button>
+    <div class="dup-toolbar" id="dupToolbar" style="display:none">
+      <span class="dup-count" id="dupCount">0 duplicate rows detected</span>
+      <button class="dup-toggle" id="dupToggleBtn" onclick="toggleDupView()">👁 Show duplicates only</button>
+    </div>
   </div>
 </div>
 
@@ -392,6 +443,7 @@
 let inputFiles = [];   // [{name, rows}]
 let wbDatabase = null;
 let resultRows  = [];
+let dupOnly = false;
 
 // ── File reading ──────────────────────────────────────────────────
 function readWB(file) {
@@ -623,6 +675,48 @@ async function runMatch() {
   document.getElementById('countMulti').textContent = multi;
   document.getElementById('countMiss').textContent  = miss;
 
+  // ── Duplicate detection ─────────────────────────────────────────
+  const colDup    = parseInt(document.getElementById('col_dup').value);
+  const dupAction = document.getElementById('dup_action').value;
+  const seen = new Map(); // normalised key → first resultRows index that has it
+
+  // First pass: mark duplicates
+  resultRows.forEach((r, idx) => {
+    if (r.status === 'header' || r.status === 'empty') return;
+    const key = normalize(String(r.cells[colDup] ?? ''));
+    if (!key) return;
+    if (seen.has(key)) {
+      r.isDup = true;
+      // also mark the first occurrence as "has dups"
+      resultRows[seen.get(key)].hasDupAfter = true;
+    } else {
+      seen.set(key, idx);
+      r.isDup = false;
+    }
+  });
+
+  const totalDups = resultRows.filter(r => r.isDup).length;
+
+  // Remove mode: filter out duplicates from resultRows (keep header + first)
+  if (dupAction === 'remove') {
+    resultRows = resultRows.filter(r => !r.isDup);
+  }
+
+  // Update dup toolbar
+  const toolbar = document.getElementById('dupToolbar');
+  const dupCount = document.getElementById('dupCount');
+  if (totalDups > 0 && dupAction === 'highlight') {
+    toolbar.style.display = 'flex';
+    dupCount.textContent = `${totalDups} duplicate row${totalDups!==1?'s':''} detected`;
+    dupOnly = false;
+    const btn = document.getElementById('dupToggleBtn');
+    btn.classList.remove('active');
+    btn.textContent = '👁 Show duplicates only';
+  } else {
+    toolbar.style.display = 'none';
+  }
+  // ── End duplicate detection ─────────────────────────────────────
+
   renderPreview();
   pFill.style.width='100%';
   setTimeout(()=>document.getElementById('progressBar').classList.remove('show'),500);
@@ -643,8 +737,12 @@ function renderPreview() {
     head.appendChild(tr);
   }
 
-  resultRows.filter(r=>r.status!=='header').slice(0,200).forEach(row=>{
+  let dataRows = resultRows.filter(r=>r.status!=='header');
+  if (dupOnly) dataRows = dataRows.filter(r=>r.isDup);
+
+  dataRows.slice(0,200).forEach(row=>{
     const tr=document.createElement('tr');
+    if (row.isDup) tr.classList.add('dup-row');
     const len=row.cells.length;
     // appended cols offset from end: Path=len-1, Status=len-2, Email=len-3, Source=len-4
     row.cells.forEach((c,i)=>{
@@ -654,18 +752,53 @@ function renderPreview() {
       else if (i===len-3 && c) { td.className='email-cell'; td.textContent=c; }
       else if (i===len-4 && c) { const s=document.createElement('span'); s.className='src-badge'; s.textContent=c; td.appendChild(s); }
       else                     { td.textContent=c??''; }
+      // Attach DUP badge to the dup-checked col cell
+      if (i === parseInt(document.getElementById('col_dup').value) && row.isDup) {
+        const db2 = document.createElement('span');
+        db2.className = 'dup-badge'; db2.textContent = 'DUP';
+        td.appendChild(db2);
+      }
       tr.appendChild(td);
     });
     body.appendChild(tr);
   });
 }
 
+function toggleDupView() {
+  dupOnly = !dupOnly;
+  const btn = document.getElementById('dupToggleBtn');
+  btn.classList.toggle('active', dupOnly);
+  btn.textContent = dupOnly ? '✕ Show all rows' : '👁 Show duplicates only';
+  renderPreview();
+}
+
 // ── Download ──────────────────────────────────────────────────────
 function downloadResult() {
-  const ws=XLSX.utils.aoa_to_sheet(resultRows.map(r=>r.cells));
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Result');
-  XLSX.writeFile(wb,'email_matched_output.xlsx');
+  const ws = XLSX.utils.aoa_to_sheet(resultRows.map(r => r.cells));
+
+  // Apply red fill to duplicate rows
+  const dupCol = parseInt(document.getElementById('col_dup').value);
+  let excelRow = 0; // 0-indexed sheet row
+  for (const r of resultRows) {
+    if (r.isDup) {
+      // highlight every cell in the row
+      const numCols = r.cells.length;
+      for (let c = 0; c < numCols; c++) {
+        const cellAddr = XLSX.utils.encode_cell({ r: excelRow, c });
+        if (!ws[cellAddr]) ws[cellAddr] = { v: '', t: 's' };
+        ws[cellAddr].s = {
+          fill: { fgColor: { rgb: 'FFD6D6' }, patternType: 'solid' },
+          font: { color: { rgb: 'CC0000' } }
+        };
+      }
+    }
+    excelRow++;
+  }
+
+  // Also add a "Duplicate" column header note in the dup-checked col header if highlighting
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Result');
+  XLSX.writeFile(wb, 'email_matched_output.xlsx');
 }
 </script>
 </body>
